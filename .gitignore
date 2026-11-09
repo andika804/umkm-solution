@@ -26,3 +26,6 @@ dist-ssr
 .env.local
 *.bak
 *.db.bak
+*.bak
+setup-umkm-solution.mjs
+patch-database.mjs
