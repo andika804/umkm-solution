@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import './App.css'
+import { DbBadge, useDbStatus, describeStorage, useRemoteSync, getBrowserId, db as cloudDb } from './lib/cloud.jsx'
+import { workspaceIdFor } from './lib/db.js'
 
 /* =====================================================================
    KONSTANTA & IDENTITAS
@@ -1220,7 +1222,7 @@ function Sidebar({ page, go, open, onClose, user, lowCount, onHome, onLogout }) 
       </div>
       <div className="sidebar-biz">
         <Icon name="store" size={18} />
-        <div><strong>{user.business}</strong><small>Mode demo</small></div>
+        <div><strong>{user.business}</strong><small>Mode demo</small><DbBadge /></div>
       </div>
       <nav className="sidebar-nav" aria-label="Navigasi utama">
         {NAV.map((n) => (
@@ -2405,12 +2407,12 @@ function AdvisorPage({ products, transactions, expenses, openModal, go }) {
       <section className="card">
         <div className="card-head"><h3>Dasar perhitungan</h3></div>
         <ul className="rules">
-          <li>Stok habis: stok = 0. Stok rendah: stok ≤ batas minimum; saran restock ≈ 2 × minimum − stok.</li>
+          <li>Stok habis = 0. Stok rendah: stok ≤ batas minimum; saran restock ≈ 2 × minimum − stok.</li>
           <li>Produk terlaris: unit terjual terbanyak pada periode; perkiraan hari stok = stok ÷ (unit terjual ÷ jumlah hari).</li>
           <li>Tren pendapatan: perubahan dibanding periode sebelumnya dengan panjang hari sama; ambang ±10%.</li>
           <li>Margin laba bersih: (pendapatan − HPP − biaya operasional) ÷ pendapatan; pembelian barang tidak dikurangkan dua kali.</li>
-          <li>Margin produk rendah: (harga jual − modal) ÷ harga jual di bawah 15%.</li>
-          <li>Stok lambat bergerak: ada stok, tidak terjual pada periode, nilai modal ≥ Rp100.000.</li>
+          <li>Margin produk terlalu rendah: (harga jual − modal) ÷ harga jual di bawah 15%.</li>
+          <li>Stok terlambat bergerak: ada stok, tidak terjual pada periode, nilai modal ≥ Rp100.000.</li>
         </ul>
       </section>
     </div>
@@ -2421,11 +2423,12 @@ function AdvisorPage({ products, transactions, expenses, openModal, go }) {
    HALAMAN: PENGATURAN
    ===================================================================== */
 function SettingsPage({ user, products, transactions, expenses, onResetDemo, onClearAll }) {
+  const dbStatus = useDbStatus()
   const status = [
     ['Autentikasi', 'Simulasi frontend (localStorage)'],
     ['Pembayaran QRIS', 'Simulasi DEMO, tidak terhubung ke bank/gateway'],
     ['Business Advisor', 'Berbasis aturan lokal, bukan AI eksternal'],
-    ['Penyimpanan data', 'localStorage browser ini'],
+    ['Penyimpanan data', describeStorage(dbStatus, cloudDb.configured)],
   ]
   return (
     <div className="page">
@@ -2489,6 +2492,14 @@ export default function App() {
 
   const currentUser = session ? users.find((u) => u.id === session.userId) || null : null
   const view = screen === 'app' && currentUser ? 'app' : 'landing'
+  const workspace = useMemo(
+    () => (currentUser ? workspaceIdFor({ email: currentUser.email, isDemo: currentUser.email === DEMO_USER.email, browserId: getBrowserId() }) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentUser && currentUser.email]
+  )
+  useRemoteSync({ collection: 'products', value: products, setValue: setProducts, workspace, validate: validProducts })
+  useRemoteSync({ collection: 'transactions', value: transactions, setValue: setTransactions, workspace, validate: validTransactions })
+  useRemoteSync({ collection: 'expenses', value: expenses, setValue: setExpenses, workspace, validate: validExpenses })
 
   /* ---------- utilitas ---------- */
   const toast = useCallback((message, type = 'success') => {
